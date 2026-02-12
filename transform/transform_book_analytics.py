@@ -17,12 +17,12 @@ def validate_inputs(data: dict) -> None:
     fact_df = data["fact_table"]
     kitap_df = data["kitap_adlari"]
 
-    # --- kitap_adlari control ---
+    # --- kitap_adlari kontrol ---
     for col in ["kitap_id", "kitap_adi"]:
         if col not in kitap_df.columns:
             raise ValueError(f"kitap_adlari missing column: {col}")
 
-    # --- fact_table control ---
+    # --- fact_table kontrol ---
     fact_required_cols = [
         "kitap_id",
         "yazar_id",
@@ -38,7 +38,7 @@ def validate_inputs(data: dict) -> None:
         if col not in fact_df.columns:
             raise ValueError(f"fact_table missing column: {col}")
 
-    # --- Null Control ---
+    # --- Null kontrolü ---
     not_null_cols = [
         "kitap_id",
         "yazar_id",
