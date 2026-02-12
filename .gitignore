@@ -1,0 +1,4 @@
+config/db_config.yaml
+__pycache__/
+*.pyc
+.DS_Store
