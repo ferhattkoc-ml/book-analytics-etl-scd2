@@ -1,5 +1,5 @@
 host: localhost
-port: ********
-user: ********
-password: **********
+port: 3306
+user: your_username
+password: your_password
 database: kitap
