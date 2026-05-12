@@ -192,6 +192,9 @@ Every execution is logged to the `etl_logs` table for full auditability.
 <sub>Built with ❤️ by Ferhat using Python & SQL.</sub>
 </p>
 
+* Bash *
 ```
+git clone https://github.com/ferhattkoc-ml/book-analytics-etl-scd2.git
+cd book-analytics-etl-scd2
 
 ```
