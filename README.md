@@ -1,200 +1,215 @@
-# 📚 Book Analytics ETL Pipeline
+<div align="center">
 
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8.0-00758F?style=for-the-badge&logo=mysql&logoColor=white)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-ORM-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white)
-![Code Style](https://img.shields.io/badge/code%20style-black-000000?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
+# 📚 Book Analytics ETL Pipeline with SCD Type 2
 
-> **A production-grade ETL pipeline designed for robust data ingestion, historical tracking (SCD Type 2), and analytics-ready modeling.**
+**Production-Grade Veri Mühendisliği · Star Schema · Tarihsel Veri Takibi**
 
----
+[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://mysql.com)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F00?style=for-the-badge&logo=python&logoColor=white)](https://sqlalchemy.org)
+[![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org)
+[![YAML](https://img.shields.io/badge/YAML-Config-8A2BE2?style=for-the-badge&logo=yaml&logoColor=white)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-## 📖 Table of Contents
-- [📍 Overview](#-overview)
-- [🏗 System Architecture](#-system-architecture)
-- [🗂 Data Model (Star Schema)](#-data-model-star-schema)
-- [⚡ Key Features](#-key-features)
-- [🛠 Installation & Setup](#-installation--setup)
-- [📊 Logging & Observability](#-logging--observability)
-- [🔮 Future Roadmap](#-future-roadmap)
+**Fail-Fast Validasyon · SHA-256 Hash ile SCD Type 2 · İdempotent Çalışma**
+
+</div>
 
 ---
 
-## 📍 Overview
+## 📌 Proje Hakkında
 
-This project implements a modular **Data Engineering Pipeline** that ingests raw book sales data, cleanses localized formatting, and loads it into a **MySQL Data Warehouse**.
+Bu proje, ham kitap satış verilerini işleyen, yerel formatları temizleyen ve **MySQL Veri Ambarına** yükleyen modüler bir **ETL Pipeline**'ıdır.
 
-Unlike simple data migration scripts, this solution focuses on **Data Quality** and **Historical Fidelity**. It employs a **Slowly Changing Dimension (SCD) Type 2** strategy to track changes in dimension attributes (e.g., book prices, authors) over time, ensuring accurate historical reporting.
+Basit veri taşıma scriptlerinden farklı olarak, **Veri Kalitesi** ve **Tarihsel Bütünlük** odaklıdır. **Slowly Changing Dimension (SCD) Type 2** stratejisi ile dimension attribute'lerindeki değişiklikleri izleyerek doğru tarihsel raporlama sağlar.
 
 ---
 
-## 🏗 System Architecture
+## 🏗️ Sistem Mimarisi
 
-The pipeline follows a strict **Extract-Load-Transform (ELT/ETL)** pattern with a "Fail-Fast" validation mechanism.
-
-```mermaid
-graph LR
-    A[Raw CSV Data] -->|Extract| B(Data Cleaning & Validation);
-    B -->|Transform| C{Change Detection};
-    C -->|Hash Comparison| D[SCD Type 2 Logic];
-    D -->|Load| E[(MySQL Data Warehouse)];
-    E -->|Logs| F[Audit Table];
-    
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style E fill:#bbf,stroke:#333,stroke-width:2px
-
+```
+┌──────────┐    ┌───────────┐    ┌──────────────┐    ┌──────────┐
+│   CSV    │ →  │  Extract   │ →  │  Transform   │ →  │   Load   │
+│ (Ham Veri)│    │  & Clean   │    │  (SCD Hash)  │    │  (MySQL) │
+└──────────┘    └───────────┘    └──────────────┘    └──────────┘
+                     │                  │                   │
+                     ↓                  ↓                   ↓
+              Schema Validation    SHA-256 Hashing     SCD Type 2
+              Type Enforcement    Business Logic      Idempotent Insert
+              Format Temizleme                         Audit Log
 ```
 
 ---
 
-## 🗂 Data Model (Star Schema)
-
-The database is designed using a **Star Schema** approach to optimize analytical queries.
-
-```mermaid
-erDiagram
-    FACT_TABLE {
-        int fact_id PK
-        int kitap_id FK
-        int yazar_id FK
-        int kitap_tur_id FK
-        date yayin_tarihi
-        decimal satis_adedi
-        decimal satis_tutari
-    }
-    DIM_BOOK ||--o{ FACT_TABLE : "has sales"
-    DIM_AUTHOR ||--o{ FACT_TABLE : "writes"
-    DIM_GENRE ||--o{ FACT_TABLE : "categorizes"
-    DIM_LANG ||--o{ FACT_TABLE : "written in"
+## 🗂️ Veri Modeli (Star Schema)
 
 ```
-
-* **Fact Table:** Stores transactional metrics (`sales_amount`, `quantity`) at the granularity of *Book + Date*.
-* **Dimension Tables:** Store descriptive attributes with SCD tracking enabled.
-
----
-
-## ⚡ Key Features
-
-### 🛡️ 1. robust Data Validation
-
-The pipeline enforces strict data quality rules before loading:
-
-* **Schema Validation:** Ensures all required columns exist.
-* **Type Enforcement:** Converts `15.08.2019` to `YYYY-MM-DD` and cleans numeric formats (e.g., `2.207,50` → `2207.50`).
-* **Business Logic:** Rejects records with negative sales or missing business keys.
-
-### 🕰️ 2. Slowly Changing Dimension (Type 2)
-
-We handle data evolution without losing history:
-
-* **Mechanism:** SHA-256 Hashing.
-* **Logic:** A hash is generated for every row based on tracked attributes. If the hash differs from the database record, the old record is "retired" (`is_active=0`, `end_date=NOW()`) and a new record is inserted.
-
-### 🔍 3. Idempotency
-
-The pipeline is designed to be idempotent. Running the pipeline multiple times on the same dataset will not result in duplicate records.
+📦 book_analytics_db (Star Schema)
+│
+├── 📊 fact_sales                        — Satış işlemleri (fact)
+│   ├── book_id (FK)
+│   ├── date_id (FK)
+│   ├── sales_amount
+│   └── quantity
+│
+├── 📋 dim_book (SCD Type 2)            — Kitap boyutu
+│   ├── book_id (PK)
+│   ├── title, author, genre
+│   ├── price (zamanla değişebilir)
+│   ├── is_active, start_date, end_date  ← SCD Type 2
+│   └── hash_sha256                      ← Değişim algılama
+│
+├── 📋 dim_date                          — Tarih boyutu
+│   └── date_id (PK), year, month, day
+│
+└── 📋 etl_logs                          — Pipeline audit tablosu
+    └── run_id, status, duration, error
+```
 
 ---
 
-## 🛠 Installation & Setup
+## ⚡ Temel Özellikler
 
-### Prerequisites
+### 🛡️ Robust Data Validation
 
-* Python 3.8+
-* MySQL Server 8.0+
+Pipeline, yükleme öncesi sıkı veri kalitesi kuralları uygular:
 
-### Steps
+| Kural | Açıklama |
+|-------|----------|
+| **Schema Validation** | Gerekli kolonların varlığını kontrol eder |
+| **Type Enforcement** | `15.08.2019` → `YYYY-MM-DD`, `2.207,50` → `2207.50` |
+| **Business Logic** | Negatif satış veya eksik business key içeren kayıtları reddeder |
 
-1. **Clone the Repository**
+### 🕰️ Slowly Changing Dimension (Type 2)
+
+Veri evrimini tarihsel bütünlükle yönetir:
+
+| Mekanizma | SHA-256 Hashing |
+|-----------|----------------|
+| **Çalışma Prensibi** | Her satır için takip edilen attributelardan hash üretilir |
+| **Değişim Tespiti** | Hash mevcut kayıttan farklıysa → eski kayıt retire edilir (`is_active=0`, `end_date=NOW()`) |
+| **Yeni Kayıt** | Güncel attributelar ile yeni kayıt insert edilir (`is_active=1`) |
+
+### 🔍 İdempotency
+
+Pipeline **idempotent** çalışır: Aynı veri seti birden çok kez çalıştırıldığında çift kayıt oluşmaz.
+
+---
+
+## ⚙️ Kurulum & Kullanım
+
 ```bash
-git clone [https://github.com/yourusername/book-analytics-etl.git](https://github.com/yourusername/book-analytics-etl.git)
-cd book-analytics-etl
+# 1. Depoyu klonla
+git clone https://github.com/ferhattkoc-ml/book-analytics-etl-scd2.git
+cd book-analytics-etl-scd2
 
-```
+# 2. Sanal ortam oluştur
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate     # Windows
 
-
-2. **Install Dependencies**
-```bash
+# 3. Bağımlılıkları yükle
 pip install -r requirements.txt
 
-```
+# 4. Konfigürasyon
+cp config/db_config_example.yaml config/db_config.yaml
+# Edit config/db_config.yaml with your MySQL credentials
 
-
-3. **Configuration**
-Edit `config/db_config.yaml` with your database credentials:
-```yaml
-database:
-  host: "localhost"
-  user: "root"
-  password: "yourpassword"
-  schema: "book_analytics_db"
-
-```
-
-
-4. **Run the Pipeline**
-```bash
+# 5. Pipeline'ı çalıştır
 python main.py
-
 ```
-
-
 
 ---
 
 ## 📊 Logging & Observability
 
-Every execution is logged to the `etl_logs` table for full auditability.
+Her çalıştırma `etl_logs` tablosuna kaydedilir.
 
-| Log Field | Description |
-| --- | --- |
-| `run_id` | Unique UUID for the execution batch |
-| `status` | `SUCCESS` or `FAILED` |
-| `duration_sec` | Execution time for performance monitoring |
-| `scd_inserts` | Number of new history records created |
-| `error_msg` | Detailed stack trace in case of failure |
+| Alan | Açıklama |
+|------|----------|
+| `run_id` | Unique UUID — her batch için |
+| `status` | `SUCCESS` veya `FAILED` |
+| `duration_sec` | Execution time — performans takibi |
+| `scd_inserts` | Yeni SCD history kaydı sayısı |
+| `error_msg` | Hata durumunda detaylı stack trace |
 
 ---
 
-## 📂 Project Structure
+## 🛠️ Tech Stack
 
-```text
-.
-├── config/              # Configuration files (YAML)
-├── data/                # Raw CSV input files
-├── src/
-│   ├── extract.py       # Data ingestion & cleaning
-│   ├── transform.py     # Business logic & SCD preparation
-│   ├── load.py          # Database operations
-│   └── validation.py    # Quality checks
-├── logs/                # Local log files
-├── main.py              # Application entry point
-├── requirements.txt     # Python dependencies
-└── README.md            # Documentation
+| Kategori | Teknolojiler |
+|----------|-------------|
+| **Dil** | Python 3.8+ |
+| **Veritabanı** | MySQL 8.0+ |
+| **ORM/Driver** | SQLAlchemy, mysql-connector-python |
+| **Veri İşleme** | Pandas |
+| **Konfigürasyon** | PyYAML |
+| **Loglama** | Python logging modülü |
+| **Format Temizleme** | Regex (Türkçe/Almanca sayı formatları) |
+| **Hash** | SHA-256 (hashlib) |
 
+---
+
+## 📂 Proje Yapısı
+
+```
+book-analytics-etl-scd2/
+├── config/
+│   └── db_config_example.yaml       # Örnek veritabanı konfigürasyonu
+├── data/
+│   ├── sql_data.csv                  # Ana satış verisi
+│   ├── sql_data_dil.csv              # Dil referans verisi
+│   ├── sql_data_kitap_adları.csv     # Kitap adı referans verisi
+│   ├── sql_data_kitap_turu.csv       # Kitap türü referans verisi
+│   └── sql_data_yazar_adlari.csv     # Yazar referans verisi
+├── extract/
+│   └── extract_mysql.py              # Extraction + temizleme katmanı
+├── transform/
+│   └── transform_book_analytics.py   # SCD hash + business logic
+├── load/
+│   ├── load_analytics.py             # Veri ambarı yükleme
+│   └── load_scd2.py                  # SCD Type 2 insert/update
+├── logs/
+│   └── logger.py                     # Log konfigürasyonu
+├── .gitignore
+├── main.py                           # Pipeline entry point
+├── requirements.txt                  # Bağımlılıklar
+└── README.md                         # Bu dosya
 ```
 
 ---
 
-## 🔮 Future Roadmap
+## 🔮 Gelecek Planları
 
-* [ ] **Containerization:** Dockerize the application for easier deployment.
-* [ ] **Orchestration:** Migrate scheduling to Apache Airflow.
-* [ ] **Visualization:** Connect a Metabase or Superset dashboard to the MySQL Warehouse.
-* [ ] **Testing:** Add PyTest unit tests for transformation logic.
+| Plan | Açıklama |
+|------|----------|
+| 🐳 **Containerization** | Dockerize ederek dağıtım kolaylığı |
+| 🔄 **Orchestration** | Apache Airflow ile scheduling |
+| 📈 **Visualization** | Metabase / Superset dashboard |
+| 🧪 **Testing** | PyTest ile birim testleri |
 
 ---
 
-<p align="center">
-<sub>Built with ❤️ by Ferhat using Python & SQL.</sub>
-</p>
+## 🧠 Öğrenilen Kavramlar
 
-* Bash *
-```
-git clone https://github.com/ferhattkoc-ml/book-analytics-etl-scd2.git
-cd book-analytics-etl-scd2
+- ✅ **ETL Pipeline Tasarımı** — Extract → Transform → Load
+- ✅ **Slowly Changing Dimension Type 2** — SHA-256 hash ile değişim algılama
+- ✅ **Star Schema** — Fact + Dimension modeli
+- ✅ **İdempotency** — Tekrarlanabilir pipeline çalışması
+- ✅ **Data Validation** — Schema, tip, iş kuralı kontrolleri
+- ✅ **Fail-Fast** — Hatalı veriyi erken yakalama
+- ✅ **Audit Logging** — Her batch için run_id bazlı izlenebilirlik
 
-```
+---
+
+## 👤 Yazar
+
+**Ferhat Koç** · [GitHub](https://github.com/ferhattkoc-ml) · [LinkedIn](https://linkedin.com/in/ferhattkocc/)
+
+> ⭐ Bu projeyi beğendiyseniz bir yıldız bırakmayı unutmayın!
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ by Ferhat Koç</sub>
+</div>
